@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NIGGER Flight Calculator</title>
+<style>
+    :root {
+        --bg-main: #121212;
+        --bg-panel: #181818;
+        --bg-input: #1a1a1a;
+        --text-main: #ffffff;
+        --text-muted: #b3b3b3;
+        --border-color: #333333;
+        --highlight: #ffffff;
+    }
+
+    * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+        background-color: var(--bg-main);
+        color: var(--text-main);
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    /* Sidebar Navigation */
+    #sidebar {
+        height: 100%;
+        width: 250px;
+        position: fixed;
+        z-index: 100;
+        top: 0;
+        left: -250px;
+        background-color: #1a1a1a;
+        border-right: 1px solid var(--border-color);
+        overflow-x: hidden;
+        transition: left 0.3s;
+        padding-top: 50px;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.5);
+    }
+
+    /* Sidebar Heading */
+    .sidebar-heading {
+        position: absolute;
+        top: 14px;
+        left: 20px;
+        font-size: 15px;
+        font-weight: 600;
+        color: var(--text-main);
+        letter-spacing: 0.5px;
+    }
+
+    #sidebar a {
+        padding: 12px 20px;
+        text-decoration: none;
+        font-size: 15px;
+        color: var(--text-muted);
+        display: block;
+        transition: 0.2s;
+        cursor: pointer;
+    }
+
+    #sidebar a:hover, #sidebar a.active {
+        color: var(--text-main);
+        background-color: #2a2a2a;
+        border-left: 3px solid var(--text-main);
+        padding-left: 17px;
+    }
+
+    #sidebar .closebtn {
+        position: absolute;
+        top: 5px;
+        right: 10px;
+        font-size: 28px;
+        border: none !important;
+        background: none !important;
+        padding: 0;
+    }
+
+    #overlay {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.6);
+        z-index: 50;
+    }
+
+    /* Main Content */
+    #main {
+        padding: 12px;
+        width: 100%;
+        height: 100%;
+        overflow-y: auto;
+    }
+
+    header {
+        display: flex;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+    .hamburger {
+        font-size: 22px;
+        cursor: pointer;
+        background: none;
+        border: none;
+        color: var(--text-main);
+        margin-right: 12px;
+    }
+
+    #page-title {
+        font-size: 18px;
+        font-weight: bold;
+    }
+
+    /* Calculator Panels */
+    .calc-panel {
+        display: none;
+        max-width: 600px;
+        margin: 0 auto;
+    }
+
+    .calc-panel.active {
+        display: block;
+    }
+
+    .section-card {
+        background-color: var(--bg-panel);
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 12px;
+    }
+
+    .form-group {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        min-height: 36px;
+    }
+
+    .form-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .left-col {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        flex: 1;
+        padding-right: 10px;
+    }
+
+    .form-group label {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--text-main);
+    }
+
+    .form-group input[type="number"], .form-group input[type="text"] {
+        width: 110px;
+        flex: 0 0 110px;
+        background-color: var(--bg-input);
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        padding: 6px 8px;
+        border-radius: 4px;
+        font-size: 16px;
+        height: 34px;
+        outline: none;
+    }
+    
+    .form-group input:focus {
+        border-color: #666;
+    }
+
+    .form-group input:read-only {
+        color: var(--text-muted);
+    }
+
+    .radio-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .radio-group label {
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        font-weight: normal;
+        cursor: pointer;
+    }
+
+    .radio-group input[type="radio"] {
+        margin: 0;
+        cursor: pointer;
+    }
+
+    /* Dashed separator line matching bounding box color */
+    .spacer {
+        height: 0;
+        border: none;
+        border-top: 1px dashed var(--border-color);
+        margin: 10px 0 12px 0;
+    }
+
+</style>
+</head>
+<body>
+
+<div id="overlay" onclick="toggleNav()"></div>
+
+<div id="sidebar">
+    <span class="sidebar-heading">NIGGER</span>
+    <a href="javascript:void(0)" class="closebtn" onclick="toggleNav()">&times;</a>
+    <a onclick="switchPanel('tas-calc')" id="nav-tas-calc" class="active">True Air Speed</a>
+    <a onclick="switchPanel('wind-calc')" id="nav-wind-calc">WCA & Ground Speed</a>
+    <a onclick="switchPanel('time-calc')" id="nav-time-calc">Flight Time</a>
+</div>
+
+<div id="main">
+    <header>
+        <button class="hamburger" onclick="toggleNav()">&#9776;</button>
+        <h2 id="page-title">True Air Speed</h2>
+    </header>
+
+    <!-- True Air Speed Calculator -->
+    <div id="tas-calc" class="calc-panel active">
+        <div class="section-card">
+            <div class="form-group">
+                <div class="left-col">
+                    <label>Indicated Altitude</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="alt_unit" value="ft" checked onchange="calcTAS()">ft</label>
+                        <label><input type="radio" name="alt_unit" value="mt" onchange="calcTAS()">mt</label>
+                    </div>
+                </div>
+                <input type="number" inputmode="decimal" id="ind_alt" oninput="calcTAS()">
+            </div>
+            <div class="form-group">
+                <div class="left-col">
+                    <label>Altimeter Setting</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="baro_unit" value="inhg" checked onchange="calcTAS()">in/hg</label>
+                        <label><input type="radio" name="baro_unit" value="hpa" onchange="calcTAS()">hpa</label>
+                    </div>
+                </div>
+                <input type="number" inputmode="decimal" id="alt_set" value="29.92" oninput="calcTAS()">
+            </div>
+            <div class="form-group">
+                <div class="left-col">
+                    <label>Outside Air Temp</label>
+                    <div class="radio-group">
+                        <label><input type="radio" name="temp_unit" value="c" checked onchange="calcTAS()">°C</label>
+                        <label><input type="radio" name="temp_unit" value="f" onchange="calcTAS()">°F</label>
+                    </div>
+                </div>
+                <input type="number" inputmode="decimal" id="oat" oninput="calcTAS()">
+            </div>
+            <div class="form-group">
+                <div class="left-col"><label>Indicated / Calibrated Air Speed :</label></div>
+                <input type="number" inputmode="decimal" id="ias" oninput="calcTAS()">
+            </div>
+            
+            <div class="spacer"></div>
+
+            <div class="form-group">
+                <div class="left-col"><label>True Air Speed (TAS) :</label></div>
+                <input type="number" id="tas_result" readonly>
+            </div>
+            <div class="form-group">
+                <div class="left-col"><label>Pressure Altitude (ft) :</label></div>
+                <input type="number" id="press_alt" readonly>
+            </div>
+            <div class="form-group">
+                <div class="left-col"><label>Density Altitude (ft) :</label></div>
+                <input type="number" id="dens_alt" readonly>
+            </div>
+        </div>
+    </div>
+
+    <!-- Wind & Heading Calculator -->
+    <div id="wind-calc" class="calc-panel">
+        <div class="section-card">
+            <div class="form-group">
+                <div class="left-col"><label>Course :</label></div>
+                <input type="number" inputmode="decimal" id="course" oninput="calcWind()">
+            </div>
+            <div class="form-group">
+                <div class="left-col"><label>True Air Speed :</label></div>
+                <input type="number" inputmode="decimal" id="tas" oninput="calcWind()">
+            </div>
+            <div class="form-group">
+                <div class="left-col"><label>Wind Direction :</label></div>
+                <input type="number" inputmode="decimal" id="wind_dir" oninput="calcWind()">
+            </div>
+            <div class="form-group">
+                <div class="left-col"><label>Wind Speed :</label></div>
+                <input type="number" inputmode="decimal" id="wind_spd" oninput="calcWind()">
+            </div>
+            
+            <div class="spacer"></div>
+
+            <div class="form-group">
+                <div class="left-col"><label>Wind Correction Angle :</label></div>
+                <input type="number" id="wca" readonly>
+            </div>
+            <div class="form-group">
+                <div class="left-col"><label>Heading :</label></div>
+                <input type="number" id="heading" readonly>
+            </div>
+            <div class="form-group">
+                <div class="left-col"><label>Ground Speed :</label></div>
+                <input type="number" id="gs_result" readonly>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flight Time Calculator -->
+    <div id="time-calc" class="calc-panel">
+        <div class="section-card">
+            <div class="form-group">
+                <div class="left-col"><label>Distance :</label></div>
+                <input type="number" inputmode="decimal" id="distance" oninput="calcTime()">
+            </div>
+            <div class="form-group">
+                <div class="left-col"><label>Ground Speed :</label></div>
+                <input type="number" inputmode="decimal" id="gs_input" oninput="calcTime()">
+            </div>
+            
+            <div class="spacer"></div>
+
+            <div class="form-group">
+                <div class="left-col"><label>Flight Time :</label></div>
+                <input type="text" id="flight_time" readonly>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let sidebarOpen = false;
+
+    function toggleNav() {
+        const sidebar = document.getElementById("sidebar");
+        const overlay = document.getElementById("overlay");
+        
+        if (!sidebarOpen) {
+            sidebar.style.left = "0";
+            overlay.style.display = "block";
+            sidebarOpen = true;
+        } else {
+            sidebar.style.left = "-250px";
+            overlay.style.display = "none";
+            sidebarOpen = false;
+        }
+    }
+
+    function switchPanel(panelId) {
+        document.querySelectorAll('.calc-panel').forEach(panel => {
+            panel.classList.remove('active');
+        });
+        document.querySelectorAll('#sidebar a:not(.closebtn)').forEach(a => {
+            a.classList.remove('active');
+        });
+        
+        document.getElementById(panelId).classList.add('active');
+        const activeNav = document.getElementById('nav-' + panelId);
+        activeNav.classList.add('active');
+        
+        let title = activeNav.innerText;
+        if(panelId === 'tas-calc') title = "True Air Speed";
+        if(panelId === 'wind-calc') title = "WCA & Ground Speed";
+        if(panelId === 'time-calc') title = "Flight Time";
+        
+        document.getElementById('page-title').innerText = title;
+        
+        if(window.innerWidth <= 768) toggleNav(); 
+    }
+
+    const deg2rad = (deg) => deg * (Math.PI / 180);
+    const rad2deg = (rad) => rad * (180 / Math.PI);
+
+    let currentBaroUnit = 'inhg';
+    let currentAltUnit = 'ft';
+    let currentTempUnit = 'c';
+
+    function calcTAS() {
+        const altUnitEl = document.querySelector('input[name="alt_unit"]:checked');
+        const baroUnitEl = document.querySelector('input[name="baro_unit"]:checked');
+        const tempUnitEl = document.querySelector('input[name="temp_unit"]:checked');
+
+        if (!altUnitEl || !baroUnitEl || !tempUnitEl) return;
+
+        const altUnit = altUnitEl.value;
+        const baroUnit = baroUnitEl.value;
+        const tempUnit = tempUnitEl.value;
+
+        const altInput = document.getElementById('ind_alt');
+        const baroInput = document.getElementById('alt_set');
+        const tempInput = document.getElementById('oat');
+        const iasInput = document.getElementById('ias');
+
+        // Bidirectional Altimeter conversion (29.92 inHg <-> 1013 hPa)
+        if (baroUnit !== currentBaroUnit) {
+            let val = parseFloat(baroInput.value);
+            if (!isNaN(val)) {
+                if (baroUnit === 'hpa') {
+                    baroInput.value = (Math.abs(val - 29.92) < 0.005) ? 1013 : Math.round(val * 33.86389);
+                } else {
+                    baroInput.value = (Math.abs(val - 1013) < 0.5) ? '29.92' : (val / 33.86389).toFixed(2);
+                }
+            }
+            currentBaroUnit = baroUnit;
+        }
+
+        // Bidirectional Altitude conversion (ft <-> mt)
+        if (altUnit !== currentAltUnit) {
+            let val = parseFloat(altInput.value);
+            if (!isNaN(val)) {
+                if (altUnit === 'mt') {
+                    altInput.value = Math.round(val * 0.3048);
+                } else {
+                    altInput.value = Math.round(val / 0.3048);
+                }
+            }
+            currentAltUnit = altUnit;
+        }
+
+        // Bidirectional Temperature conversion (°C <-> °F)
+        if (tempUnit !== currentTempUnit) {
+            let val = parseFloat(tempInput.value);
+            if (!isNaN(val)) {
+                if (tempUnit === 'f') {
+                    tempInput.value = Math.round((val * 9/5) + 32);
+                } else {
+                    tempInput.value = Math.round((val - 32) * 5/9);
+                }
+            }
+            currentTempUnit = tempUnit;
+        }
+
+        let alt = parseFloat(altInput.value);
+        let baro = parseFloat(baroInput.value);
+        let oat = parseFloat(tempInput.value);
+        let ias = parseFloat(iasInput.value);
+
+        if (isNaN(alt) || isNaN(baro) || isNaN(oat) || isNaN(ias)) {
+            document.getElementById('press_alt').value = '';
+            document.getElementById('dens_alt').value = '';
+            document.getElementById('tas_result').value = '';
+            return;
+        }
+
+        const altFt = (altUnit === 'mt') ? alt * 3.28084 : alt;
+        const oatC = (tempUnit === 'f') ? (oat - 32) * 5/9 : oat;
+        const baroInHg = (baroUnit === 'hpa') ? ((Math.abs(baro - 1013) < 0.5) ? 29.92 : baro / 33.86389) : baro;
+
+        const pressAlt = altFt + (29.92 - baroInHg) * 1000;
+        const standardTemp = 15 - (2 * (pressAlt / 1000));
+        const densAlt = pressAlt + 120 * (oatC - standardTemp);
+        let tas = ias * (1 + (0.02 * (densAlt / 1000)));
+
+        document.getElementById('press_alt').value = Math.round(pressAlt);
+        document.getElementById('dens_alt').value = Math.round(densAlt);
+        document.getElementById('tas_result').value = Math.round(tas);
+        
+        document.getElementById('tas').value = Math.round(tas);
+        calcWind(); 
+    }
+
+    function calcWind() {
+        const course = parseFloat(document.getElementById('course').value);
+        const tas = parseFloat(document.getElementById('tas').value);
+        const windDir = parseFloat(document.getElementById('wind_dir').value);
+        const windSpd = parseFloat(document.getElementById('wind_spd').value);
+
+        if (isNaN(course) || isNaN(tas) || isNaN(windDir) || isNaN(windSpd) || tas === 0) {
+            document.getElementById('wca').value = '';
+            document.getElementById('heading').value = '';
+            document.getElementById('gs_result').value = '';
+            return;
+        }
+
+        const windAngle = deg2rad(windDir - course);
+        const crossWind = windSpd * Math.sin(windAngle);
+        const headWind = windSpd * Math.cos(windAngle);
+
+        let wcaRad = Math.asin(crossWind / tas);
+        if (isNaN(wcaRad)) return; 
+        
+        let wca = rad2deg(wcaRad);
+        let heading = course + wca;
+        if (heading < 0) heading += 360;
+        if (heading >= 360) heading -= 360;
+
+        let gs = (tas * Math.cos(wcaRad)) - headWind;
+
+        document.getElementById('wca').value = Math.round(wca);
+        document.getElementById('heading').value = Math.round(heading);
+        document.getElementById('gs_result').value = Math.round(gs);
+        
+        document.getElementById('gs_input').value = Math.round(gs);
+        calcTime(); 
+    }
+
+    function calcTime() {
+        const dist = parseFloat(document.getElementById('distance').value);
+        const gs = parseFloat(document.getElementById('gs_input').value);
+
+        if (isNaN(dist) || isNaN(gs) || gs <= 0) {
+            document.getElementById('flight_time').value = '';
+            return;
+        }
+
+        let totalSeconds = Math.round((dist / gs) * 3600);
+        const hours = Math.floor(totalSeconds / 3600);
+        totalSeconds %= 3600;
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+
+        const pad = (num) => String(num).padStart(2, '0');
+        document.getElementById('flight_time').value = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+    }
+
+    window.onload = () => {
+        calcTAS();
+        calcWind();
+    };
+</script>
+</body>
+</html>
