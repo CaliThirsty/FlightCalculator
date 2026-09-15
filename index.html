@@ -475,9 +475,6 @@
         document.getElementById('press_alt').value = Math.round(pressAlt);
         document.getElementById('dens_alt').value = Math.round(densAlt);
         document.getElementById('tas_result').value = Math.round(tas);
-        
-        document.getElementById('tas').value = Math.round(tas);
-        calcWind(); 
     }
 
     function calcWind() {
@@ -510,9 +507,6 @@
         document.getElementById('wca').value = Math.round(wca);
         document.getElementById('heading').value = Math.round(heading);
         document.getElementById('gs_result').value = Math.round(gs);
-        
-        document.getElementById('gs_input').value = Math.round(gs);
-        calcTime(); 
     }
 
     function calcTime() {
@@ -533,11 +527,6 @@
         const pad = (num) => String(num).padStart(2, '0');
         document.getElementById('flight_time').value = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
     }
-
-    window.onload = () => {
-        calcTAS();
-        calcWind();
-    };
 </script>
 </body>
 </html>
