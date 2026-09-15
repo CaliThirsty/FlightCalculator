@@ -213,7 +213,6 @@
         border-top: 1px dashed var(--border-color);
         margin: 10px 0 12px 0;
     }
-
 </style>
 </head>
 <body>
@@ -346,7 +345,6 @@
             </div>
         </div>
     </div>
-
 </div>
 
 <script>
@@ -395,6 +393,54 @@
     let currentBaroUnit = 'inhg';
     let currentAltUnit = 'ft';
     let currentTempUnit = 'c';
+
+    // Exact ICAO / NOAA Standard Atmosphere and Compressibility Model
+    const AeroModel = {
+        P0: 29.92126,       // Standard sea level pressure (inHg)
+        T0: 288.15,         // Standard sea level temperature (K)
+        A0: 661.4786,       // Speed of sound at sea level (knots)
+        LAPSE_RATE: 0.0019812, // K/ft
+        EXP_P: 5.2558797,
+        EXP_INV: 0.190263,
+        EXP_DENS: 0.234969,
+        FT_FACTOR: 145366.45,
+
+        // Calculate ambient pressure from indicated altitude and altimeter setting
+        getPressure: function(altFt, baroInHg) {
+            return baroInHg * Math.pow(1 - (6.8755856e-6 * altFt), this.EXP_P);
+        },
+
+        // Exact Pressure Altitude (ft)
+        calcPressureAltitude: function(altFt, baroInHg) {
+            const p = this.getPressure(altFt, baroInHg);
+            return this.FT_FACTOR * (1 - Math.pow(p / this.P0, this.EXP_INV));
+        },
+
+        // Exact Density Altitude (ft)
+        calcDensityAltitude: function(altFt, baroInHg, oatC) {
+            const p = this.getPressure(altFt, baroInHg);
+            const tk = oatC + 273.15;
+            if (tk <= 0 || p <= 0) return 0;
+            const sigma = (p / this.P0) * (this.T0 / tk);
+            return this.FT_FACTOR * (1 - Math.pow(sigma, this.EXP_DENS));
+        },
+
+        // Compressible True Airspeed (TAS) in knots
+        calcTAS: function(ias, altFt, baroInHg, oatC) {
+            if (ias <= 0) return 0;
+            const p = this.getPressure(altFt, baroInHg);
+            const tk = oatC + 273.15;
+            if (p <= 0 || tk <= 0) return 0;
+
+            // Impact pressure from calibrated/indicated airspeed
+            const qc = this.P0 * (Math.pow(1 + 0.2 * Math.pow(ias / this.A0, 2), 3.5) - 1);
+            // Mach number accounting for compressibility
+            const mach = Math.sqrt(5 * (Math.pow((qc / p) + 1, 2 / 7) - 1));
+            // Local speed of sound
+            const a = 38.967854 * Math.sqrt(tk);
+            return mach * a;
+        }
+    };
 
     function calcTAS() {
         const altUnitEl = document.querySelector('input[name="alt_unit"]:checked');
@@ -463,14 +509,13 @@
             return;
         }
 
-        const altFt = (altUnit === 'mt') ? alt * 3.28084 : alt;
+        const altFt = (altUnit === 'mt') ? alt * 3.2808399 : alt;
         const oatC = (tempUnit === 'f') ? (oat - 32) * 5/9 : oat;
-        const baroInHg = (baroUnit === 'hpa') ? ((Math.abs(baro - 1013) < 0.5) ? 29.92 : baro / 33.86389) : baro;
+        const baroInHg = (baroUnit === 'hpa') ? ((Math.abs(baro - 1013) < 0.5) ? 29.92126 : baro / 33.86389) : baro;
 
-        const pressAlt = altFt + (29.92 - baroInHg) * 1000;
-        const standardTemp = 15 - (2 * (pressAlt / 1000));
-        const densAlt = pressAlt + 120 * (oatC - standardTemp);
-        let tas = ias * (1 + (0.02 * (densAlt / 1000)));
+        const pressAlt = AeroModel.calcPressureAltitude(altFt, baroInHg);
+        const densAlt = AeroModel.calcDensityAltitude(altFt, baroInHg, oatC);
+        const tas = AeroModel.calcTAS(ias, altFt, baroInHg, oatC);
 
         document.getElementById('press_alt').value = Math.round(pressAlt);
         document.getElementById('dens_alt').value = Math.round(densAlt);
@@ -483,7 +528,7 @@
         const windDir = parseFloat(document.getElementById('wind_dir').value);
         const windSpd = parseFloat(document.getElementById('wind_spd').value);
 
-        if (isNaN(course) || isNaN(tas) || isNaN(windDir) || isNaN(windSpd) || tas === 0) {
+        if (isNaN(course) || isNaN(tas) || isNaN(windDir) || isNaN(windSpd) || tas <= 0) {
             document.getElementById('wca').value = '';
             document.getElementById('heading').value = '';
             document.getElementById('gs_result').value = '';
@@ -494,18 +539,23 @@
         const crossWind = windSpd * Math.sin(windAngle);
         const headWind = windSpd * Math.cos(windAngle);
 
-        let wcaRad = Math.asin(crossWind / tas);
-        if (isNaN(wcaRad)) return; 
+        const swc = crossWind / tas;
+        if (Math.abs(swc) > 1) {
+            document.getElementById('wca').value = '';
+            document.getElementById('heading').value = '';
+            document.getElementById('gs_result').value = '';
+            return; 
+        }
         
-        let wca = rad2deg(wcaRad);
-        let heading = course + wca;
+        const wcaRad = Math.asin(swc);
+        const wca = rad2deg(wcaRad);
+        let heading = (course + wca) % 360;
         if (heading < 0) heading += 360;
-        if (heading >= 360) heading -= 360;
 
-        let gs = (tas * Math.cos(wcaRad)) - headWind;
+        const gs = (tas * Math.cos(wcaRad)) - headWind;
 
-        document.getElementById('wca').value = Math.round(wca);
-        document.getElementById('heading').value = Math.round(heading);
+        document.getElementById('wca').value = Math.round(wca) || 0;
+        document.getElementById('heading').value = Math.round(heading) === 0 ? 360 : Math.round(heading);
         document.getElementById('gs_result').value = Math.round(gs);
     }
 
@@ -513,7 +563,7 @@
         const dist = parseFloat(document.getElementById('distance').value);
         const gs = parseFloat(document.getElementById('gs_input').value);
 
-        if (isNaN(dist) || isNaN(gs) || gs <= 0) {
+        if (isNaN(dist) || isNaN(gs) || gs <= 0 || dist < 0) {
             document.getElementById('flight_time').value = '';
             return;
         }
