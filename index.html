@@ -254,7 +254,7 @@
                         <label><input type="radio" name="baro_unit" value="hpa" onchange="calcTAS()">hpa</label>
                     </div>
                 </div>
-                <input type="number" inputmode="decimal" id="alt_set" value="29.92" oninput="calcTAS()">
+                <input type="number" inputmode="decimal" id="alt_set" min="0" step="0.01" value="29.92" oninput="calcTAS()">
             </div>
             <div class="form-group">
                 <div class="left-col">
@@ -264,7 +264,7 @@
                         <label><input type="radio" name="temp_unit" value="f" onchange="calcTAS()">°F</label>
                     </div>
                 </div>
-                <input type="number" inputmode="decimal" id="oat" oninput="calcTAS()">
+                <input type="number" inputmode="decimal" id="oat" step="any" oninput="calcTAS()">
             </div>
             <div class="form-group">
                 <div class="left-col"><label>Indicated / Calibrated Air Speed :</label></div>
@@ -394,34 +394,37 @@
     let currentAltUnit = 'ft';
     let currentTempUnit = 'c';
 
-    // Exact ICAO / NOAA Standard Atmosphere and Compressibility Model
+    // Standard ICAO / NOAA Atmosphere and Compressibility Model
     const AeroModel = {
-        P0: 29.92126,       // Standard sea level pressure (inHg)
-        T0: 288.15,         // Standard sea level temperature (K)
-        A0: 661.4786,       // Speed of sound at sea level (knots)
-        LAPSE_RATE: 0.0019812, // K/ft
-        EXP_P: 5.2558797,
-        EXP_INV: 0.190263,
-        EXP_DENS: 0.234969,
-        FT_FACTOR: 145366.45,
+        P0: 29.92126,          // Sea level standard pressure (inHg)
+        T0: 288.15,            // Sea level standard temperature (K)
+        A0: 661.4786,          // Standard speed of sound at sea level (knots)
+        EXP_P: 5.2558797,      // g / (R * L)
+        EXP_INV: 0.190263,     // 1 / EXP_P
+        EXP_DENS: 0.234969,    // 1 / (EXP_P - 1)
+        FT_FACTOR: 145442.16,  // T0 / L (ft)
+        LAPSE_RATE: 6.8755856e-6, // L / T0 (ft^-1)
 
         // Calculate ambient pressure from indicated altitude and altimeter setting
         getPressure: function(altFt, baroInHg) {
-            return baroInHg * Math.pow(1 - (6.8755856e-6 * altFt), this.EXP_P);
+            if (altFt * this.LAPSE_RATE >= 1) return 0;
+            return baroInHg * Math.pow(1 - (this.LAPSE_RATE * altFt), this.EXP_P);
         },
 
-        // Exact Pressure Altitude (ft)
+        // Pressure Altitude (ft)
         calcPressureAltitude: function(altFt, baroInHg) {
             const p = this.getPressure(altFt, baroInHg);
+            if (p <= 0) return 0;
             return this.FT_FACTOR * (1 - Math.pow(p / this.P0, this.EXP_INV));
         },
 
-        // Exact Density Altitude (ft)
+        // Density Altitude (ft)
         calcDensityAltitude: function(altFt, baroInHg, oatC) {
             const p = this.getPressure(altFt, baroInHg);
             const tk = oatC + 273.15;
             if (tk <= 0 || p <= 0) return 0;
             const sigma = (p / this.P0) * (this.T0 / tk);
+            if (sigma <= 0) return 0;
             return this.FT_FACTOR * (1 - Math.pow(sigma, this.EXP_DENS));
         },
 
@@ -435,7 +438,9 @@
             // Impact pressure from calibrated/indicated airspeed
             const qc = this.P0 * (Math.pow(1 + 0.2 * Math.pow(ias / this.A0, 2), 3.5) - 1);
             // Mach number accounting for compressibility
-            const mach = Math.sqrt(5 * (Math.pow((qc / p) + 1, 2 / 7) - 1));
+            const machRatio = (qc / p) + 1;
+            if (machRatio <= 0) return 0;
+            const mach = Math.sqrt(Math.max(0, 5 * (Math.pow(machRatio, 2 / 7) - 1)));
             // Local speed of sound
             const a = 38.967854 * Math.sqrt(tk);
             return mach * a;
@@ -463,63 +468,101 @@
             let val = parseFloat(baroInput.value);
             if (!isNaN(val)) {
                 if (baroUnit === 'hpa') {
-                    baroInput.value = (Math.abs(val - 29.92) < 0.005) ? 1013 : Math.round(val * 33.86389);
+                    // Standard 29.92 inHg snaps cleanly to 1013; others round up to 4 decimals
+                    baroInput.value = (Math.abs(val - 29.92) < 0.005) ? '1013' : parseFloat((val * 33.86389).toFixed(4));
                 } else {
-                    baroInput.value = (Math.abs(val - 1013) < 0.5) ? '29.92' : (val / 33.86389).toFixed(2);
+                    // 1013 snaps cleanly back to 29.92; others round to 2 decimals
+                    baroInput.value = (Math.abs(val - 1013) < 0.05 || Math.abs(val - 1013.25) < 0.05) ? '29.92' : (val / 33.86389).toFixed(2);
                 }
             }
+            // Stepper: 1.0 for hPa, 0.01 for in/hg
+            baroInput.step = (baroUnit === 'hpa') ? '1' : '0.01';
             currentBaroUnit = baroUnit;
         }
 
-        // Bidirectional Altitude conversion (ft <-> mt)
+        // Bidirectional Altitude conversion (ft <-> mt) accurate up to 4 decimals
         if (altUnit !== currentAltUnit) {
             let val = parseFloat(altInput.value);
             if (!isNaN(val)) {
                 if (altUnit === 'mt') {
-                    altInput.value = Math.round(val * 0.3048);
+                    altInput.value = parseFloat((val * 0.3048).toFixed(4));
                 } else {
-                    altInput.value = Math.round(val / 0.3048);
+                    altInput.value = parseFloat((val / 0.3048).toFixed(4));
                 }
             }
             currentAltUnit = altUnit;
         }
 
-        // Bidirectional Temperature conversion (°C <-> °F)
+        // Bidirectional Temperature conversion (°C <-> °F) accurate up to two decimals
         if (tempUnit !== currentTempUnit) {
             let val = parseFloat(tempInput.value);
             if (!isNaN(val)) {
-                if (tempUnit === 'f') {
-                    tempInput.value = Math.round((val * 9/5) + 32);
-                } else {
-                    tempInput.value = Math.round((val - 32) * 5/9);
-                }
+                let converted = (tempUnit === 'f') ? ((val * 9/5) + 32) : ((val - 32) * 5/9);
+                if (Math.abs(converted) < 0.0001) converted = 0;
+                tempInput.value = Number(converted.toFixed(2));
             }
             currentTempUnit = tempUnit;
         }
 
-        let alt = parseFloat(altInput.value);
-        let baro = parseFloat(baroInput.value);
-        let oat = parseFloat(tempInput.value);
-        let ias = parseFloat(iasInput.value);
+        const altStr = altInput.value.trim();
+        const baroStr = baroInput.value.trim();
+        const tempStr = tempInput.value.trim();
+        const iasStr = iasInput.value.trim();
 
-        if (isNaN(alt) || isNaN(baro) || isNaN(oat) || isNaN(ias)) {
-            document.getElementById('press_alt').value = '';
-            document.getElementById('dens_alt').value = '';
-            document.getElementById('tas_result').value = '';
-            return;
+        const hasAlt = altStr !== '' && !isNaN(Number(altStr));
+        const hasBaro = baroStr !== '' && !isNaN(Number(baroStr));
+        const hasTemp = tempStr !== '' && !isNaN(Number(tempStr));
+        const hasIas = iasStr !== '' && !isNaN(Number(iasStr));
+
+        const pressAltEl = document.getElementById('press_alt');
+        const densAltEl = document.getElementById('dens_alt');
+        const tasResultEl = document.getElementById('tas_result');
+
+        // Progressive E6BX-style calculation
+        if (hasAlt && hasBaro) {
+            const alt = parseFloat(altStr);
+            const baro = parseFloat(baroStr);
+
+            const altFt = (altUnit === 'mt') ? alt / 0.3048 : alt;
+            let baroInHg;
+            if (baroUnit === 'hpa') {
+                baroInHg = (Math.abs(baro - 1013) < 0.05 || Math.abs(baro - 1013.25) < 0.05) ? 29.92126 : (baro / 33.86389);
+            } else {
+                baroInHg = (Math.abs(baro - 29.92) < 0.005) ? 29.92126 : baro;
+            }
+
+            const pressAlt = AeroModel.calcPressureAltitude(altFt, baroInHg);
+            pressAltEl.value = Math.round(pressAlt);
+
+            if (hasTemp) {
+                const temp = parseFloat(tempStr);
+                const oatC = (tempUnit === 'f') ? (temp - 32) * 5/9 : temp;
+
+                const densAlt = AeroModel.calcDensityAltitude(altFt, baroInHg, oatC);
+                densAltEl.value = Math.round(densAlt);
+
+                if (hasIas) {
+                    const ias = parseFloat(iasStr);
+                    if (ias < 0) {
+                        tasResultEl.value = '';
+                    } else if (ias === 0) {
+                        tasResultEl.value = '0';
+                    } else {
+                        const tas = AeroModel.calcTAS(ias, altFt, baroInHg, oatC);
+                        tasResultEl.value = Math.round(tas);
+                    }
+                } else {
+                    tasResultEl.value = '';
+                }
+            } else {
+                densAltEl.value = '';
+                tasResultEl.value = '';
+            }
+        } else {
+            pressAltEl.value = '';
+            densAltEl.value = '';
+            tasResultEl.value = '';
         }
-
-        const altFt = (altUnit === 'mt') ? alt * 3.2808399 : alt;
-        const oatC = (tempUnit === 'f') ? (oat - 32) * 5/9 : oat;
-        const baroInHg = (baroUnit === 'hpa') ? ((Math.abs(baro - 1013) < 0.5) ? 29.92126 : baro / 33.86389) : baro;
-
-        const pressAlt = AeroModel.calcPressureAltitude(altFt, baroInHg);
-        const densAlt = AeroModel.calcDensityAltitude(altFt, baroInHg, oatC);
-        const tas = AeroModel.calcTAS(ias, altFt, baroInHg, oatC);
-
-        document.getElementById('press_alt').value = Math.round(pressAlt);
-        document.getElementById('dens_alt').value = Math.round(densAlt);
-        document.getElementById('tas_result').value = Math.round(tas);
     }
 
     function calcWind() {
@@ -577,6 +620,8 @@
         const pad = (num) => String(num).padStart(2, '0');
         document.getElementById('flight_time').value = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
     }
+
+    document.addEventListener('DOMContentLoaded', calcTAS);
 </script>
 </body>
 </html>
